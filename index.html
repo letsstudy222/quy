@@ -93,6 +93,23 @@ svg { flex: none; }
 .fund { position: relative; overflow: hidden; }
 .fund::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--carbon)); }
 .fund .tag { display: inline-flex; align-items: center; gap: 6px; }
+.goal { border: 1px solid var(--rule); border-radius: 14px; padding: 14px; background: var(--panel); }
+.goal.done { border-color: var(--green-b); background: var(--green-s); }
+.goal h4 { margin: 0; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal .gh { display: flex; align-items: center; gap: 8px; }
+.goal .gh .badge { flex: none; }
+.goal .gh .acts { display: flex; margin-left: auto; flex: none; }
+.badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--rule); color: var(--ink2); }
+.badge.ok { background: var(--green); border-color: var(--green); color: #fff; }
+.badge.late { background: var(--red-s); border-color: var(--red-b); color: var(--red); }
+.need { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+.need > div { background: var(--panel2); border: 1px solid var(--rule2); border-radius: 10px; padding: 8px 10px; }
+.need b { display: block; font-family: var(--mono); font-size: 13.5px; }
+.need small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+select.in { appearance: auto; }
+.mini { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
+.mini .prog { flex: 1; margin: 0; height: 6px; }
+.mini span:first-child { width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
 .pct { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--rule); color: var(--ink2); }
 .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; border-top: 1px dashed var(--rule); color: var(--ink2); }
 .kv b { font-family: var(--mono); color: var(--ink); font-weight: 600; }
@@ -177,7 +194,7 @@ details.box .body { padding: 0 16px 14px; }
 <header class="hdr">
   <div class="hdr-in">
     <div class="brand"><span class="mark">QUỸ</span><span class="wordmark">Quản lý quỹ</span></div>
-    <button class="icon" data-act="eye" id="eyeBtn" title="Ẩn/hiện số tiền"></button>
+    <button class="icon" data-act="eye" id="eyeBtn" title="Bấm để ẩn/hiện số tiền"></button>
     <button class="chip" data-act="rate" title="Tỷ giá USD → VND"><span data-ic="coins"></span><span id="rateChip">—</span></button>
     <button class="sync" id="syncChip" data-act="resync" title="Đồng bộ"><span class="dot"></span><span class="sync-lbl" id="syncLbl">Chưa đăng nhập</span></button>
     <button class="icon" data-act="settings" title="Cài đặt"><span data-ic="gear"></span></button>
@@ -289,7 +306,7 @@ details.box .body { padding: 0 16px 14px; }
 
   function blank() {
     return { v: 1, startedAt: "", rate: 26000, split: { rot: 50, sav: 40, spd: 10 },
-      init: null, goal: null, baseline: [], receipts: [], withdrawals: [], spends: [], payments: [], updatedAt: "" };
+      init: null, goal: null, goals: [], savTx: [], baseline: [], receipts: [], withdrawals: [], spends: [], payments: [], updatedAt: "" };
   }
   var D = blank();
   var ST = { needSQL: false, loaded: false, ledgerAt: "", ledgerErr: "" };
@@ -303,7 +320,14 @@ details.box .body { padding: 0 16px 14px; }
     var b = blank();
     for (var k in b) if (d[k] === undefined) d[k] = b[k];
     if (!d.split || num(d.split.rot) + num(d.split.sav) + num(d.split.spd) !== 100) d.split = b.split;
-    ["baseline", "receipts", "withdrawals", "spends", "payments"].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+    ["baseline", "receipts", "withdrawals", "spends", "payments", "goals", "savTx"].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+    /* chuyển mục tiêu đơn cũ sang danh sách mục tiêu */
+    if (d.goal && num(d.goal.amt) > 0 && !d.goals.length) {
+      var gid = "g" + uid();
+      d.goals.push({ id: gid, name: "Mục tiêu tiết kiệm", amt: num(d.goal.amt), cur: d.goal.cur || "VND", deadline: "", note: "", createdAt: todayISO() });
+      d.withdrawals.forEach(function (w) { if (!w.goalId) w.goalId = gid; });
+    }
+    d.goal = null;
     return d;
   }
   function saveLocal() { if (CFG.uid) lsSet(DKEY + CFG.uid, JSON.stringify(D)); }
@@ -463,13 +487,45 @@ details.box .body { padding: 0 16px 14px; }
     o.rot = o.rotIn - o.paid;
     o.sav = o.savIn;
     o.spd = o.spdIn - o.spent;
-    if (D.goal && num(D.goal.amt) > 0) {
-      o.goalVND = D.goal.cur === "USD" ? num(D.goal.amt) * rate() : num(D.goal.amt);
-      o.goalLeft = Math.max(0, o.goalVND - o.sav);
-      o.goalPct = Math.min(100, o.goalVND > 0 ? o.sav / o.goalVND * 100 : 0);
-    }
+    o.savAdd = 0; o.savOut = 0;
+    D.savTx.forEach(function (t) { if (t.type === "out") o.savOut += num(t.vnd); else o.savAdd += num(t.vnd); });
+    o.sav = o.savIn + o.savAdd - o.savOut;
     return o;
   }
+
+  /* ---- mục tiêu ---- */
+  function goalById(id) { return find(D.goals, id); }
+  function goalName(id) { var g = goalById(id); return g ? g.name : "Chung"; }
+  function goalHave(id) {   /* id "" = Chung (chưa gắn / mục tiêu đã xoá) */
+    var known = {}, v = 0; D.goals.forEach(function (g) { known[g.id] = 1; });
+    function match(x) { return id ? x === id : !(x && known[x]); }
+    D.withdrawals.forEach(function (w) { if (match(w.goalId)) v += wPart(w, "sav"); });
+    D.savTx.forEach(function (t) { if (match(t.goalId)) v += (t.type === "out" ? -1 : 1) * num(t.vnd); });
+    return v;
+  }
+  function daysBetween(a, b) { return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5); }
+  function goalCalc(g) {
+    var r = rate(), o = { target: g.cur === "USD" ? num(g.amt) * r : num(g.amt), have: goalHave(g.id) };
+    o.left = Math.max(0, o.target - o.have);
+    o.pct = o.target > 0 ? Math.min(100, Math.max(0, o.have / o.target * 100)) : 0;
+    o.done = o.target > 0 && o.have >= o.target;
+    if (g.deadline) {
+      o.days = daysBetween(todayISO(), g.deadline);
+      if (o.days > 0) {
+        o.perDay = o.left / o.days;
+        o.perWeek = o.days >= 7 ? o.left / (o.days / 7) : o.left;
+        o.perMonth = o.days >= 30 ? o.left / (o.days / 30) : o.left;
+      }
+    }
+    o.needUSD = D.split.sav > 0 ? o.left / r / (D.split.sav / 100) : 0;
+    return o;
+  }
+  function goalOptions(sel) {
+    var h = D.goals.map(function (g) { return '<option value="' + g.id + '"' + (sel === g.id ? " selected" : "") + ">" + esc(g.name) + (goalCalc(g).done ? " (đã đạt)" : "") + "</option>"; }).join("");
+    return h + '<option value=""' + (!sel || !goalById(sel) ? " selected" : "") + ">Chung (chưa gắn mục tiêu)</option>";
+  }
+  function defGoal() { return D.lastGoal && goalById(D.lastGoal) ? D.lastGoal : (D.goals[0] ? D.goals[0].id : ""); }
+  function both(v) { return vnd(v) + " · " + usd(v / rate()); }
 
   /* ============ giao diện ============ */
   var TABS = [
@@ -496,6 +552,8 @@ details.box .body { padding: 0 16px 14px; }
     else if (ST.needSQL) v.innerHTML = viewSQL();
     else if (!D.startedAt) v.innerHTML = viewInit();
     else v.innerHTML = ({ home: viewHome, main: viewMain, wd: viewWd, rot: viewRot, spd: viewSpd, sav: viewSav, hist: viewHist }[UI.tab] || viewHome)();
+    if (ready && UI.hide) v.innerHTML = '<button class="banner info" data-act="eye" style="width:100%;cursor:pointer">' + ic("eyeoff", 16) +
+      '<span>Đang <b>ẩn số tiền</b>. Bấm vào đây (hoặc biểu tượng con mắt trên thanh trên cùng) để hiện lại.</span></button>' + v.innerHTML;
     paintIcons(document.body);
     bindMoney(v);
     wdPreview("w");
@@ -584,9 +642,10 @@ details.box .body { padding: 0 16px 14px; }
     var f = FUND[k], bal = b[k], extra = "";
     if (k === "rot") extra = '<div class="kv"><span>Đã được chia</span><b>' + vnd(b.rotIn) + '</b></div><div class="kv"><span>Đã trừ thanh toán</span><b>' + vnd(b.paid) + "</b></div>";
     if (k === "spd") extra = '<div class="kv"><span>Đã được chia</span><b>' + vnd(b.spdIn) + '</b></div><div class="kv"><span>Đã tiêu</span><b>' + vnd(b.spent) + "</b></div>";
-    if (k === "sav") extra = b.goalVND ? '<div class="prog"><i style="width:' + b.goalPct.toFixed(1) + '%"></i></div>' +
-      '<div class="kv"><span>Mục tiêu</span><b>' + vnd(b.goalVND) + '</b></div><div class="kv"><span>Còn thiếu</span><b>' + vnd(b.goalLeft) + " · " + usd(b.goalLeft / rate()) + "</b></div>"
-      : '<div class="kv"><span>Chưa đặt mục tiêu</span><button class="btn sm" data-act="goal">Đặt mục tiêu</button></div>';
+    if (k === "sav") extra = (D.goals.length ? D.goals.map(function (g) {
+        var c = goalCalc(g); return '<div class="mini"><span>' + esc(g.name) + '</span><div class="prog"><i style="width:' + c.pct.toFixed(1) + '%"></i></div><b class="mono">' + Math.floor(c.pct) + "%</b></div>";
+      }).join("") : '<div class="kv"><span>Chưa có mục tiêu</span></div>') +
+      '<div class="row" style="margin-top:8px;gap:6px"><button class="btn sm" data-act="savAdd">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut">' + ic("up", 14) + ' Rút</button><button class="btn sm" data-act="goSav">Mục tiêu</button></div>';
     return '<div class="card fund" style="--c:' + f.c + '"><div class="row"><span class="tag lbl" style="color:' + f.c + '">' + ic(f.ic, 15) + f.name + '</span><span class="pct sp">' + D.split[k] + "%</span></div>" +
       '<div class="mid' + (bal < 0 ? " neg" : "") + '" style="margin-top:6px">' + vnd(bal) + '</div><div class="sub">≈ ' + usd(bal / rate()) + "</div>" +
       '<div style="margin-top:10px">' + extra + "</div>" +
@@ -625,16 +684,20 @@ details.box .body { padding: 0 16px 14px; }
     D.withdrawals.forEach(function (w) { a.push({ t: "wd", date: w.date, ts: w.ts || 0, o: w }); });
     D.payments.forEach(function (p) { a.push({ t: "pay", date: p.date, ts: p.ts || 0, o: p }); });
     D.spends.forEach(function (s) { a.push({ t: "spd", date: s.date, ts: s.ts || 0, o: s }); });
+    D.savTx.forEach(function (s) { a.push({ t: "sav", date: s.date, ts: s.ts || 0, o: s }); });
     return a.sort(function (x, y) { return x.date < y.date ? 1 : x.date > y.date ? -1 : (y.ts - x.ts); });
   }
   function actRow(a) {
     var o = a.o, r = rate();
     if (a.t === "init") return li("wallet", "var(--carbon-s)", "var(--carbon)", "Số dư ban đầu", dmy(a.date), usd(initUSD()), o.cur === "VND" ? vnd(o.amt) : vnd(initUSD() * r), "init", "init");
     if (a.t === "rec") return li("down", "var(--green-s)", "var(--green)", "Nhận tiền" + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "+" + usd(o.usd), "≈ " + vnd(o.usd * r), "rec", o.id);
-    if (a.t === "wd") return li("split", "var(--blue-s)", "var(--blue)", "Rút & chia" + (o.note ? " · " + esc(o.note) : ""),
+    if (a.t === "wd") return li("split", "var(--blue-s)", "var(--blue)", "Rút & chia" + (o.note ? " · " + esc(o.note) : "") + " · TK → " + esc(goalName(o.goalId)),
       dmy(o.date) + " · " + NFV.format(o.rate) + " ₫/$ · " + o.pct.rot + "/" + o.pct.sav + "/" + o.pct.spd, "−" + usd(o.usd), vnd(wVND(o)), "wd", o.id);
     if (a.t === "pay") return li("rotate", "var(--carbon-s)", "var(--carbon)", "Thanh toán · " + esc(o.name) + (o.week ? " · tuần " + o.week + "/4" : ""),
       dmy(o.date) + " · trừ Xoay vòng" + (o.off ? " · không tính" : ""), "−" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "pay", o.id, o.off);
+    if (a.t === "sav") return o.type === "out"
+      ? li("up", "var(--red-s)", "var(--red)", "Rút tiết kiệm · " + esc(goalName(o.goalId)) + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "−" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "sav", o.id)
+      : li("piggy", "var(--green-s)", "var(--green)", "Thêm tiết kiệm · " + esc(goalName(o.goalId)) + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "+" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "sav", o.id);
     return li("cart", "var(--amber-s)", "var(--amber)", "Tiêu dùng" + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "−" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "spd", o.id);
   }
   function li(icn, bg, fg, t1, t2, amt, amt2, kind, id, off) {
@@ -667,6 +730,7 @@ details.box .body { padding: 0 16px 14px; }
       '<label class="fl" for="wAmt">Số tiền rút</label>' + moneyInput("wAmt", 0, "USD", false, "wRate") +
       '<div class="row" style="gap:8px"><div style="flex:1;min-width:140px"><label class="fl" for="wRate">Tỷ giá lúc rút</label><input class="in mono" id="wRate" inputmode="numeric" value="' + NFV.format(rate()) + '" data-rate></div>' +
       '<div style="flex:1;min-width:140px"><label class="fl" for="wDate">Ngày</label><input class="in" id="wDate" type="date" value="' + todayISO() + '"></div></div>' +
+      '<label class="fl" for="wGoal">Phần tiết kiệm (' + D.split.sav + '%) đưa vào mục tiêu</label><select class="in" id="wGoal">' + goalOptions(defGoal()) + "</select>" +
       '<label class="fl" for="wNote">Ghi chú</label><input class="in" id="wNote" placeholder="không bắt buộc">' +
       '<div class="split3" id="wPrev"></div><div id="wWarn" class="hide"></div>' +
       '<div style="margin-top:14px"><button class="btn primary block" data-act="withdraw">' + ic("split", 16) + " Rút và chia vào 3 quỹ</button></div>" +
@@ -698,25 +762,47 @@ details.box .body { padding: 0 16px 14px; }
   }
 
   /* ---------- Tiết kiệm ---------- */
+  function goalCard(g) {
+    var c = goalCalc(g), r = rate();
+    var badge = c.done ? '<span class="badge ok">Đã đạt</span>' : (g.deadline ? (c.days > 0 ? '<span class="badge">Còn ' + c.days + " ngày</span>" : '<span class="badge late">' + (c.days === 0 ? "Hạn hôm nay" : "Quá hạn " + (-c.days) + " ngày") + "</span>") : '<span class="badge">Không đặt hạn</span>');
+    var need = "";
+    if (!c.done) {
+      if (g.deadline && c.days > 0) {
+        need = '<div class="need"><div><div class="lbl">Mỗi ngày</div><b>' + vnd(c.perDay) + "</b><small>" + usd(c.perDay / r) + "</small></div>" +
+          '<div><div class="lbl">Mỗi tuần</div><b>' + vnd(c.perWeek) + "</b><small>" + usd(c.perWeek / r) + "</small></div>" +
+          '<div><div class="lbl">Mỗi tháng</div><b>' + vnd(c.perMonth) + "</b><small>" + usd(c.perMonth / r) + "</small></div></div>";
+      }
+      need += '<p class="hint">Cần rút thêm khoảng <b>' + usd(c.needUSD) + "</b> từ Quỹ USD (với " + D.split.sav + "% vào tiết kiệm) để đủ mục tiêu" +
+        (g.deadline && c.days > 0 ? ", tức ~<b>" + usd(c.needUSD / (c.days / 30 < 1 ? 1 : c.days / 30)) + "/tháng</b>" : "") + ".</p>";
+    }
+    return '<div class="goal' + (c.done ? " done" : "") + '"><div class="gh"><h4>' + esc(g.name) + "</h4>" + badge +
+      '<span class="acts"><button class="icon" data-act="goalEdit" data-id="' + g.id + '" title="Sửa">' + ic("edit", 16) + '</button><button class="icon" data-act="goalDel" data-id="' + g.id + '" title="Xoá">' + ic("trash", 16) + "</button></span></div>" +
+      (g.note ? '<div class="t2" style="color:var(--muted);font-size:12px">' + esc(g.note) + "</div>" : "") +
+      '<div class="row" style="margin-top:8px;align-items:baseline"><span class="mid">' + vnd(c.have) + '</span><span class="sub">/ ' + vnd(c.target) + (g.cur === "USD" ? " (" + usd(g.amt) + ")" : "") + "</span></div>" +
+      '<div class="prog"><i style="width:' + c.pct.toFixed(1) + '%"></i></div>' +
+      '<div class="kv" style="border:none"><span>Đạt ' + c.pct.toFixed(1) + "%" + (g.deadline ? " · hạn " + dmy(g.deadline) : "") + "</span><b>" + (c.done ? "Dư " + both(c.have - c.target) : "Còn thiếu " + both(c.left)) + "</b></div>" +
+      need +
+      '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" data-act="savAdd" data-id="' + g.id + '">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut" data-id="' + g.id + '">' + ic("up", 14) + " Rút</button></div></div>";
+  }
   function viewSav() {
-    var b = B(), r = rate(), wd = listOf(["wd"]);
-    var goal = b.goalVND
-      ? '<div class="card"><div class="row"><span class="lbl">' + ic("flag", 14) + ' Mục tiêu tiết kiệm</span><button class="btn sm sp" data-act="goal">' + ic("edit", 14) + " Sửa</button></div>" +
-        '<div class="mid" style="margin-top:6px">' + vnd(b.goalVND) + '</div><div class="sub">≈ ' + usd(b.goalVND / r) + (D.goal.cur === "USD" ? " (đặt theo USD)" : "") + "</div>" +
-        '<div class="prog"><i style="width:' + b.goalPct.toFixed(1) + '%"></i></div><div class="row"><span class="sub">Đạt ' + b.goalPct.toFixed(1) + "%</span></div>" +
-        '<div class="grid" style="margin-top:12px;grid-template-columns:1fr 1fr"><div><div class="lbl">Còn thiếu (VND)</div><div class="mid' + (b.goalLeft ? "" : " pos") + '">' + vnd(b.goalLeft) + "</div></div>" +
-        '<div><div class="lbl">Còn thiếu (USD)</div><div class="mid' + (b.goalLeft ? "" : " pos") + '">' + usd(b.goalLeft / r) + "</div></div></div>" +
-        (b.goalLeft ? '<p class="hint">Với tỷ lệ ' + D.split.sav + "% vào tiết kiệm, cần rút thêm khoảng <b>" + usd(b.goalLeft / r / (D.split.sav / 100)) + "</b> từ Quỹ USD để đạt mục tiêu.</p>" : '<p class="hint pos"><b>Đã đạt mục tiêu 🎉</b></p>') + "</div>"
-      : '<div class="card"><span class="lbl">Mục tiêu tiết kiệm</span><p class="hint">Chưa đặt mục tiêu.</p><button class="btn primary" data-act="goal">' + ic("flag", 16) + " Đặt mục tiêu</button></div>";
-    return '<div class="grid">' + fundCard("sav", b) + "</div>" + goal +
-      box("sav-list", "Các lần được chia vào tiết kiệm", wd.length, wd.map(function (a) {
-        var w = a.o; return li("piggy", "var(--green-s)", "var(--green)", "Từ lần rút " + usd(w.usd) + (w.note ? " · " + esc(w.note) : ""), dmy(w.date) + " · " + w.pct.sav + "%", "+" + vnd(wPart(w, "sav")), "≈ " + usd(wPart(w, "sav") / r), "wd", w.id);
-      }).join("") || '<div class="empty">Chưa có.</div>', false);
+    var b = B(), r = rate(), gen = goalHave("");
+    var top = '<div class="card fund" style="--c:var(--green)"><div class="row"><span class="tag lbl" style="color:var(--green)">' + ic("piggy", 15) + 'Tổng tiết kiệm</span><span class="pct sp">' + D.split.sav + "%</span></div>" +
+      '<div class="mid' + (b.sav < 0 ? " neg" : "") + '" style="margin-top:6px">' + vnd(b.sav) + '</div><div class="sub">≈ ' + usd(b.sav / r) + "</div>" +
+      '<div style="margin-top:10px"><div class="kv"><span>Từ các lần rút & chia</span><b>' + vnd(b.savIn) + '</b></div><div class="kv"><span>Thêm tay</span><b>+' + vnd(b.savAdd) + '</b></div><div class="kv"><span>Rút ra</span><b>−' + vnd(b.savOut) + "</b></div></div>" +
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn primary sm" data-act="savAdd">' + ic("plus", 14) + ' Thêm tiền</button><button class="btn sm" data-act="savOut">' + ic("up", 14) + " Rút tiền</button></div></div>";
+    var goals = '<div class="card"><div class="row"><span class="lbl">' + ic("flag", 14) + " Mục tiêu (" + D.goals.length + ')</span><button class="btn primary sm sp" data-act="goalNew">' + ic("plus", 14) + " Thêm mục tiêu</button></div>" +
+      '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">' + (D.goals.map(goalCard).join("") || '<div class="empty">Chưa có mục tiêu nào. Bấm “Thêm mục tiêu”.</div>') + "</div>" +
+      (Math.abs(gen) >= 1 ? '<div class="kv" style="margin-top:10px"><span>Chung (chưa gắn mục tiêu)</span><b>' + both(gen) + "</b></div>" : "") + "</div>";
+    var hist = activities().filter(function (a) { return a.t === "sav" || a.t === "wd"; }).map(function (a) {
+      if (a.t === "sav") return actRow(a);
+      var w = a.o; return li("piggy", "var(--green-s)", "var(--green)", "Từ lần rút " + usd(w.usd) + " → " + esc(goalName(w.goalId)), dmy(w.date) + " · " + w.pct.sav + "%", "+" + vnd(wPart(w, "sav")), "≈ " + usd(wPart(w, "sav") / r), "wd", w.id);
+    });
+    return top + goals + box("sav-list", "Lịch sử tiết kiệm", hist.length, hist.join("") || '<div class="empty">Chưa có.</div>', false);
   }
 
   /* ---------- Lịch sử ---------- */
   function viewHist() {
-    var F = [["all", "Tất cả"], ["rec", "Nhận tiền"], ["wd", "Rút"], ["pay", "Thanh toán"], ["spd", "Tiêu dùng"]];
+    var F = [["all", "Tất cả"], ["rec", "Nhận tiền"], ["wd", "Rút"], ["pay", "Thanh toán"], ["spd", "Tiêu dùng"], ["sav", "Tiết kiệm"]];
     var list = activities().filter(function (a) { return UI.hfilter === "all" || a.t === UI.hfilter || (UI.hfilter === "rec" && a.t === "init"); });
     return '<div class="card"><div class="filters">' + F.map(function (f) { return '<button class="fchip' + (UI.hfilter === f[0] ? " on" : "") + '" data-hf="' + f[0] + '">' + f[1] + "</button>"; }).join("") + "</div>" +
       (list.map(actRow).join("") || '<div class="empty">Không có mục nào.</div>') + "</div>";
@@ -758,6 +844,7 @@ details.box .body { padding: 0 16px 14px; }
       '<label class="fl" for="eAmt">Số tiền rút</label>' + moneyInput("eAmt", w.usd, "USD", false, "eRate") +
       '<div class="row" style="gap:8px"><div style="flex:1;min-width:130px"><label class="fl" for="eRate">Tỷ giá lúc rút</label><input class="in mono" id="eRate" inputmode="numeric" value="' + NFV.format(w.rate) + '" data-rate></div>' +
       '<div style="flex:1;min-width:130px"><label class="fl" for="eDate">Ngày</label><input class="in" id="eDate" type="date" value="' + w.date + '"></div></div>' +
+      '<label class="fl" for="eGoal">Phần tiết kiệm vào mục tiêu</label><select class="in" id="eGoal">' + goalOptions(w.goalId) + "</select>" +
       '<label class="fl" for="eNote">Ghi chú</label><input class="in" id="eNote" value="' + esc(w.note || "") + '">' +
       '<div class="split3" id="ePrev"></div><div id="eWarn" class="hide"></div>' +
       '<p class="hint">Lần rút này giữ tỷ lệ chia lúc rút: ' + w.pct.rot + "/" + w.pct.sav + "/" + w.pct.spd + ".</p>",
@@ -774,12 +861,31 @@ details.box .body { padding: 0 16px 14px; }
       '<label class="fl" for="iDate">Ngày bắt đầu</label><input class="in" id="iDate" type="date" value="' + (i.date || D.startedAt.slice(0, 10)) + '">',
       CANCEL + '<button class="btn primary" data-act="saveInit">Lưu</button>');
   }
-  function goalSheet() {
-    var g = D.goal || { amt: 0, cur: "VND" };
-    modal("Mục tiêu tiết kiệm",
-      '<label class="fl" for="gAmt">Số tiền mục tiêu</label>' + moneyInput("gAmt", g.amt, g.cur, true) +
-      '<p class="hint">Đặt theo USD thì mục tiêu quy ra VND sẽ thay đổi theo tỷ giá hiện tại.</p>',
-      (D.goal ? '<button class="btn danger" data-act="clearGoal">Bỏ mục tiêu</button>' : CANCEL) + '<button class="btn primary" data-act="saveGoal">Lưu</button>');
+  function goalSheet(id) {
+    var g = id ? goalById(id) : null;
+    modal(g ? "Sửa mục tiêu" : "Mục tiêu mới",
+      '<label class="fl" for="gName">Tên mục tiêu</label><input class="in" id="gName" value="' + esc(g ? g.name : "") + '" placeholder="ví dụ: Mua xe, Quỹ dự phòng">' +
+      '<label class="fl" for="gAmt">Số tiền mục tiêu</label>' + moneyInput("gAmt", g ? g.amt : 0, g ? g.cur : "VND", true) +
+      '<label class="fl" for="gDate">Hạn hoàn thành (không bắt buộc)</label><input class="in" id="gDate" type="date" value="' + (g ? g.deadline || "" : "") + '" min="' + todayISO() + '">' +
+      '<div class="calc" id="gDays"></div>' +
+      '<label class="fl" for="gNote">Ghi chú</label><input class="in" id="gNote" value="' + esc(g ? g.note || "" : "") + '">' +
+      '<p class="hint">Đặt theo USD thì số VND cần đạt sẽ thay đổi theo tỷ giá hiện tại.</p>',
+      CANCEL + '<button class="btn primary" data-act="saveGoal" data-id="' + (id || "") + '">Lưu</button>', function () {
+        var d = document.getElementById("gDate"), out = document.getElementById("gDays");
+        var upd = function () { out.textContent = d.value ? "Còn " + daysBetween(todayISO(), d.value) + " ngày" : ""; };
+        d.addEventListener("input", upd); upd();
+      });
+  }
+  function savTxSheet(type, goalId, id) {
+    var t = id ? find(D.savTx, id) : null;
+    if (t) { type = t.type; goalId = t.goalId; }
+    var cur = t ? (t.cur || "VND") : "VND", amt = t ? (t.cur === "USD" ? t.amt : t.vnd) : 0;
+    modal((t ? "Sửa · " : "") + (type === "out" ? "Rút tiền tiết kiệm" : "Thêm tiền tiết kiệm"),
+      '<label class="fl" for="sGoal">Mục tiêu</label><select class="in" id="sGoal">' + goalOptions(goalId !== undefined ? goalId : defGoal()) + "</select>" +
+      '<label class="fl" for="mAmt">Số tiền</label>' + moneyInput("mAmt", amt, cur, true) +
+      '<label class="fl" for="mDate">Ngày</label><input class="in" id="mDate" type="date" value="' + (t ? t.date : todayISO()) + '">' +
+      '<label class="fl" for="mNote">Nội dung</label><input class="in" id="mNote" value="' + esc(t ? t.note : "") + '" placeholder="' + (type === "out" ? "rút để làm gì" : "tiền từ đâu") + '">',
+      CANCEL + '<button class="btn primary" data-act="saveSavTx" data-type="' + type + '" data-id="' + (id || "") + '">Lưu</button>');
   }
   function rateSheet() {
     modal("Tỷ giá", '<label class="fl" for="rVal">1 USD = ? VND</label><input class="in mono" id="rVal" inputmode="numeric" value="' + NFV.format(rate()) + '" data-rate>' +
@@ -797,7 +903,7 @@ details.box .body { padding: 0 16px 14px; }
       '<p class="hint">Chỉ áp dụng cho các lần rút sau. Lần rút cũ giữ tỷ lệ cũ.</p>' +
       '<div class="kv" style="margin-top:12px"><span>Tỷ giá</span><button class="btn sm" data-act="rate">' + NFV.format(rate()) + " ₫</button></div>" +
       (D.startedAt ? '<div class="kv"><span>Số dư ban đầu</span><button class="btn sm" data-act="editInit">' + usd(initUSD(), 1) + "</button></div>" +
-        '<div class="kv"><span>Mục tiêu tiết kiệm</span><button class="btn sm" data-act="goal">' + (D.goal ? (D.goal.cur === "USD" ? usd(D.goal.amt, 1) : vnd(D.goal.amt, 1)) : "Đặt") + "</button></div>" : "") +
+        '<div class="kv"><span>Mục tiêu tiết kiệm</span><button class="btn sm" data-act="goSav">' + D.goals.length + " mục tiêu</button></div>" : "") +
       '<div class="kv"><span>Tài khoản</span><b style="font-family:inherit">' + esc(CFG.email) + "</b></div>" +
       '<div class="row" style="margin-top:14px"><button class="btn sm" data-act="export">Tải bản sao lưu (.json)</button><button class="btn sm danger" data-act="logout">Đăng xuất</button></div>' +
       (D.startedAt ? '<div class="row" style="margin-top:8px"><button class="btn sm danger" data-act="reset">Xoá toàn bộ & bắt đầu lại</button></div>' : ""),
@@ -848,14 +954,33 @@ details.box .body { padding: 0 16px 14px; }
         D = blank(); D.rate = r; D.startedAt = new Date().toISOString();
         D.init = { amt: amt, cur: cur, rate: r, date: todayISO() };
         D.baseline = allPayLogs(acc).map(function (l) { return l.id; });
-        var g = valOf("gAmt"); if (g > 0) D.goal = { amt: g, cur: curOf("gAmt") };
+        var g = valOf("gAmt"); if (g > 0) D.goals.push({ id: "g" + uid(), name: "Mục tiêu tiết kiệm", amt: g, cur: curOf("gAmt"), deadline: "", note: "", createdAt: todayISO() });
         ST.ledgerAt = hhmm(); save(); UI.tab = "home"; saveUI(); render();
         toast("Đã bắt đầu. Bỏ qua " + D.baseline.length + " lần thanh toán cũ.");
       }).catch(function (x) { el.disabled = false; el.textContent = "Bắt đầu từ hôm nay"; toast("Không đọc được Sổ thuê: " + x.message); });
     },
     receive: function () { receiveSheet(); },
     spend: function () { spendSheet(); },
-    goal: function () { goalSheet(); },
+    goal: function () { UI.tab = "sav"; saveUI(); closeModal(); render(); },
+    goSav: function () { UI.tab = "sav"; saveUI(); closeModal(); render(); window.scrollTo(0, 0); },
+    goalNew: function () { goalSheet(); },
+    goalEdit: function (el) { goalSheet(el.getAttribute("data-id")); },
+    goalDel: function (el) {
+      var g = goalById(el.getAttribute("data-id")); if (!g) return;
+      confirmSheet("Xoá mục tiêu “" + esc(g.name) + "”?", "Số tiền đang có của mục tiêu này (" + vnd(goalHave(g.id), 1) + ") sẽ chuyển về “Chung”, không bị mất.", "goalDelOK", g.id);
+    },
+    goalDelOK: function (el) { var id = el.getAttribute("data-id"); D.goals = D.goals.filter(function (g) { return g.id !== id; }); save(); closeModal(); render(); toast("Đã xoá mục tiêu"); },
+    savAdd: function (el) { savTxSheet("add", el.getAttribute("data-id") || undefined); },
+    savOut: function (el) { savTxSheet("out", el.getAttribute("data-id") || undefined); },
+    saveSavTx: function (el) {
+      var amt = valOf("mAmt"), cur = curOf("mAmt"); if (!(amt > 0)) { toast("Nhập số tiền"); return; }
+      var id = el.getAttribute("data-id"), t = id ? find(D.savTx, id) : null;
+      if (!t) { t = { id: uid(), ts: Date.now(), type: el.getAttribute("data-type") }; D.savTx.push(t); }
+      t.cur = cur; t.amt = cur === "USD" ? r2(amt) : Math.round(amt); t.vnd = Math.round(cur === "USD" ? amt * rate() : amt);
+      t.goalId = val("sGoal"); t.date = val("mDate") || todayISO(); t.note = val("mNote");
+      D.lastGoal = t.goalId || D.lastGoal;
+      save(); closeModal(); render(); toast(id ? "Đã sửa" : (t.type === "out" ? "Đã rút " : "Đã thêm ") + vnd(t.vnd, 1) + " · " + goalName(t.goalId));
+    },
     gowd: function () { UI.tab = "wd"; saveUI(); render(); window.scrollTo(0, 0); },
     ledger: function () { syncLedger(true); },
     editInit: function () { initSheet(); },
@@ -877,13 +1002,14 @@ details.box .body { padding: 0 16px 14px; }
       var u = valOf("wAmt"), r = rateIn("wRate");
       if (!(u > 0)) { toast("Nhập số tiền rút"); return; }
       D.withdrawals.push({ id: uid(), ts: Date.now(), usd: r2(u), rate: r, date: val("wDate") || todayISO(), note: val("wNote"),
-        pct: { rot: D.split.rot, sav: D.split.sav, spd: D.split.spd } });
+        pct: { rot: D.split.rot, sav: D.split.sav, spd: D.split.spd }, goalId: val("wGoal") });
+      D.lastGoal = val("wGoal");
       save(); render(); toast("Đã rút " + usd(u, 1) + " = " + vnd(u * r, 1) + " và chia vào 3 quỹ");
     },
     saveWd: function (el) {
       var w = find(D.withdrawals, el.getAttribute("data-id")); if (!w) return;
       var u = valOf("eAmt"); if (!(u > 0)) { toast("Nhập số tiền rút"); return; }
-      w.usd = r2(u); w.rate = rateIn("eRate"); w.date = val("eDate") || w.date; w.note = val("eNote");
+      w.usd = r2(u); w.rate = rateIn("eRate"); w.date = val("eDate") || w.date; w.note = val("eNote"); w.goalId = val("eGoal");
       save(); closeModal(); render(); toast("Đã sửa lần rút");
     },
     saveInit: function () {
@@ -891,11 +1017,15 @@ details.box .body { padding: 0 16px 14px; }
       D.init = { amt: amt, cur: curOf("iAmt"), rate: r, date: val("iDate") || D.init.date };
       save(); closeModal(); render(); toast("Đã sửa số dư ban đầu");
     },
-    saveGoal: function () {
-      var g = valOf("gAmt"); D.goal = g > 0 ? { amt: g, cur: curOf("gAmt") } : null;
-      save(); closeModal(); render(); toast(g > 0 ? "Đã lưu mục tiêu" : "Đã bỏ mục tiêu");
+    saveGoal: function (el) {
+      var name = val("gName"), amt = valOf("gAmt");
+      if (!name) { toast("Nhập tên mục tiêu"); return; }
+      if (!(amt > 0)) { toast("Nhập số tiền mục tiêu"); return; }
+      var id = el.getAttribute("data-id"), g = id ? goalById(id) : null;
+      if (!g) { g = { id: "g" + uid(), createdAt: todayISO() }; D.goals.push(g); }
+      g.name = name; g.amt = amt; g.cur = curOf("gAmt"); g.deadline = val("gDate"); g.note = val("gNote");
+      save(); closeModal(); render(); toast(id ? "Đã sửa mục tiêu" : "Đã thêm mục tiêu");
     },
-    clearGoal: function () { D.goal = null; save(); closeModal(); render(); },
     saveRate: function () {
       var r = parseAmt(val("rVal"), "VND"); if (!(r > 0)) { toast("Tỷ giá không hợp lệ"); return; }
       D.rate = r; save(); closeModal(); render(); toast("Tỷ giá: " + NFV.format(r) + " ₫");
@@ -907,16 +1037,16 @@ details.box .body { padding: 0 16px 14px; }
     },
     edit: function (el) {
       var k = el.getAttribute("data-kind"), id = el.getAttribute("data-id");
-      if (k === "rec") receiveSheet(id); else if (k === "spd") spendSheet(id); else if (k === "wd") wdEditSheet(id); else if (k === "init") initSheet();
+      if (k === "rec") receiveSheet(id); else if (k === "spd") spendSheet(id); else if (k === "wd") wdEditSheet(id); else if (k === "init") initSheet(); else if (k === "sav") savTxSheet(null, undefined, id);
     },
     del: function (el) {
       var k = el.getAttribute("data-kind");
-      var name = { rec: "lần nhận tiền", spd: "khoản tiêu", wd: "lần rút (số tiền đã chia vào 3 quỹ cũng bị bỏ theo)" }[k];
+      var name = { rec: "lần nhận tiền", spd: "khoản tiêu", wd: "lần rút (số tiền đã chia vào 3 quỹ cũng bị bỏ theo)", sav: "giao dịch tiết kiệm" }[k];
       confirmSheet("Xoá mục này?", "Xoá " + name + ". Không hoàn tác được.", "delOK", el.getAttribute("data-id"), k);
     },
     delOK: function (el) {
       var k = el.getAttribute("data-kind"), id = el.getAttribute("data-id");
-      var key = { rec: "receipts", spd: "spends", wd: "withdrawals" }[k];
+      var key = { rec: "receipts", spd: "spends", wd: "withdrawals", sav: "savTx" }[k];
       D[key] = D[key].filter(function (x) { return x.id !== id; });
       save(); closeModal(); render(); toast("Đã xoá");
     },
