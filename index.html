@@ -552,15 +552,28 @@ details.box .body { padding: 0 16px 14px; }
     if (addMonthsISO(a, m) > b) m--;
     return Math.max(0, m);
   }
+  /* Cách ngân hàng tính: lãi mỗi kỳ = gốc × lãi suất năm × SỐ NGÀY THỰC của kỳ / 365.
+     reinvest = true: lãi nhập gốc cho kỳ sau (lãi kép); false: chỉ quay vòng gốc. */
+  function compound(P, rt, start, term, n, reinvest) {
+    var bal = P, tot = 0, rows = [];
+    for (var i = 1; i <= n; i++) {
+      var a = addMonthsISO(start, (i - 1) * term), b = addMonthsISO(start, i * term), days = daysBetween(a, b);
+      var it = Math.round((reinvest ? bal : P) * rt * days / 365);
+      tot += it; if (reinvest) bal += it;
+      rows.push({ i: i, from: a, to: b, days: days, interest: it, bal: reinvest ? bal : P + tot });
+    }
+    return { total: P + tot, interest: tot, rows: rows };
+  }
   function depCalc(d, until) {
     var P = num(d.amt), term = Math.max(1, num(d.term)), rt = num(d.rate) / 100;
-    var perRate = rt * term / 12, o = { term: term, perRate: perRate };
+    var o = { term: term };
     o.months = until ? fullMonths(d.date, until) : 0;
     o.n = until ? Math.floor(o.months / term) : 0;
-    o.final = Math.round(P * Math.pow(1 + perRate, o.n));
+    o.final = compound(P, rt, d.date, term, o.n, true).total;
     o.interest = o.final - P;
     o.lastMat = o.n > 0 ? addMonthsISO(d.date, o.n * term) : "";
-    o.firstInt = Math.round(P * perRate);
+    o.firstDays = daysBetween(d.date, addMonthsISO(d.date, term));
+    o.firstInt = Math.round(P * rt * o.firstDays / 365);
     var k = 1; while (addMonthsISO(d.date, k * term) <= todayISO() && k < 999) k++;
     o.nextMat = addMonthsISO(d.date, k * term);
     return o;
@@ -898,29 +911,28 @@ details.box .body { padding: 0 16px 14px; }
     KC.amt = valOf("kAmt"); KC.rate = parseAmt(val("kRate"), "USD"); KC.term = num(val("kTerm")) || 6;
     KC.dur = Math.max(0, Math.floor(num(val("kDur")))); KC.date = val("kDate") || todayISO();
     lsSet("quy-calc-v1", JSON.stringify(KC));
-    var P = KC.amt, m = KC.term, per = KC.rate / 100 * m / 12;
+    var P = KC.amt, m = KC.term, rt = KC.rate / 100;
     if (!(P > 0) || !(KC.rate > 0)) { out.innerHTML = '<p class="hint">Nhập số tiền và lãi suất để xem kết quả.</p>'; return; }
     var n = KC.mode === "none" ? 1 : Math.floor(KC.dur / m);
     var odd = KC.mode === "none" ? 0 : KC.dur - n * m;
     if (n < 1) { out.innerHTML = '<div class="banner info" style="margin-top:12px">' + ic("alert", 16) + "<span>Tổng thời gian gửi ngắn hơn 1 kỳ hạn (" + m + " tháng) nên chưa có kỳ nào trọn để tính lãi.</span></div>"; return; }
-    var bal = P, totInt = 0, rows = "";
-    for (var i = 1; i <= n; i++) {
-      var it = Math.round((KC.mode === "comp" ? bal : P) * per);
-      totInt += it; if (KC.mode === "comp") bal += it;
-      if (i <= 120) rows += "<tr><td>Kỳ " + i + "</td><td>" + dmy(addMonthsISO(KC.date, i * m)) + '</td><td class="g">+' + NFV.format(it) + "</td><td>" + NFV.format(KC.mode === "comp" ? bal : P + totInt) + "</td></tr>";
-    }
+    var cp = compound(P, rt, KC.date, m, n, KC.mode === "comp"), totInt = cp.interest, rows = "";
+    cp.rows.slice(0, 120).forEach(function (x) {
+      rows += "<tr><td>Kỳ " + x.i + "</td><td>" + dmy(x.to) + "</td><td>" + x.days + '</td><td class="g">+' + NFV.format(x.interest) + "</td><td>" + NFV.format(x.bal) + "</td></tr>";
+    });
     var total = P + totInt, mat = addMonthsISO(KC.date, n * m), r = rate();
     var eff = (Math.pow(total / P, 12 / (n * m)) - 1) * 100;
     out.innerHTML = '<div class="kres"><div class="lbl">Nhận về ngày ' + dmy(mat) + " (sau " + n * m + " tháng)</div>" +
       '<div class="big" style="margin-top:4px">' + vnd(total, 1) + '</div><div class="sub">≈ ' + usd(total / r, 1) + "</div>" +
       '<div class="kstats"><div><small>Tiền lãi</small><b>+' + vnd(totInt, 1) + "</b></div>" +
       "<div><small>Số kỳ trọn</small><b>" + n + " kỳ × " + m + " th</b></div>" +
-      "<div><small>Lãi mỗi kỳ" + (KC.mode === "comp" ? " (kỳ đầu)" : "") + "</small><b>" + vnd(Math.round(P * per), 1) + "</b></div>" +
+      "<div><small>Lãi mỗi kỳ" + (KC.mode === "comp" ? " (kỳ đầu)" : "") + "</small><b>" + vnd(cp.rows[0].interest, 1) + "</b></div>" +
       "<div><small>Lãi suất thực/năm</small><b>" + eff.toFixed(2) + "%</b></div></div></div>" +
       (odd > 0 ? '<p class="hint">' + odd + " tháng lẻ còn lại không đủ 1 kỳ nên không tính lãi.</p>" : "") +
+      '<p class="hint">Công thức ngân hàng: lãi mỗi kỳ = số dư × ' + KC.rate + '% × số ngày thực của kỳ / 365. Kỳ 1: ' + NFV.format(KC.mode === "comp" ? P : P) + " × " + KC.rate + "% × " + cp.rows[0].days + "/365 = " + NFV.format(cp.rows[0].interest) + " ₫.</p>" +
       (KC.mode === "prin" ? '<p class="hint">Lãi được rút ra mỗi kỳ, không nhập gốc — tổng trên = gốc + tổng lãi đã nhận.</p>' : "") +
       '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--pink)">Xem chi tiết từng kỳ</summary>' +
-      '<table class="ktab"><thead><tr><th>Kỳ</th><th>Đáo hạn</th><th>Lãi</th><th>Số dư</th></tr></thead><tbody>' + rows + "</tbody></table></details>";
+      '<table class="ktab"><thead><tr><th>Kỳ</th><th>Đáo hạn</th><th>Ngày</th><th>Lãi</th><th>Số dư</th></tr></thead><tbody>' + rows + "</tbody></table></details>";
   }
 
   function viewSav() {
@@ -1039,14 +1051,14 @@ details.box .body { padding: 0 16px 14px; }
       TERMS.concat(TERMS.indexOf(term) < 0 ? [term] : []).map(function (t) { return '<option value="' + t + '"' + (t === term ? " selected" : "") + ">" + t + " tháng</option>"; }).join("") + "</select></div></div>" +
       '<label class="fl" for="dDate">Ngày gửi</label><input class="in" id="dDate" type="date" value="' + (d ? d.date : todayISO()) + '">' +
       '<div class="proj" id="dPrev"></div>' +
-      '<p class="hint">Lãi kép, tự động quay vòng cả gốc và lãi. Chỉ tính các kỳ <b>trọn</b> tới hạn mục tiêu' + (g.deadline ? " (" + dmy(g.deadline) + ")" : "") + ".</p>",
+      '<p class="hint">Lãi mỗi kỳ = số dư × lãi suất × số ngày thực của kỳ / 365, tự quay vòng cả gốc và lãi. Chỉ tính các kỳ <b>trọn</b> tới hạn mục tiêu' + (g.deadline ? " (" + dmy(g.deadline) + ")" : "") + ".</p>",
       CANCEL + '<button class="btn primary" data-act="saveDep" data-goal="' + goalId + '" data-id="' + (id || "") + '">Lưu</button>', function () {
         var upd = function () {
           var x = { amt: valOf("mAmt"), rate: parseAmt(val("dRate"), "USD"), term: num(val("dTerm")), date: val("dDate") || todayISO() };
           var el = document.getElementById("dPrev");
           if (!(x.amt > 0) || !(x.rate > 0)) { el.innerHTML = "Nhập số tiền và lãi suất để xem lãi dự kiến."; return; }
           var c = depCalc(x, g.deadline);
-          el.innerHTML = "Lãi mỗi kỳ đầu: <b>" + vnd(c.firstInt, 1) + "</b> (" + (x.rate * x.term / 12).toFixed(3).replace(/\.?0+$/, "") + "%/kỳ)<br>" +
+          el.innerHTML = "Lãi kỳ đầu (" + c.firstDays + " ngày): <b>" + vnd(c.firstInt, 1) + "</b> = " + NFV.format(x.amt) + " × " + x.rate + "% × " + c.firstDays + "/365<br>" +
             (g.deadline ? "Đến hạn: " + c.months + " tháng tròn → <b>" + c.n + " kỳ</b>" + (c.n ? " (kỳ cuối " + dmy(c.lastMat) + ")" : "") +
               "<br>Lãi dự kiến: <b>+" + vnd(c.interest, 1) + "</b> → gốc + lãi <b>" + vnd(c.final, 1) + "</b>"
               : "Mục tiêu chưa đặt hạn nên chưa tính được lãi đến hạn.");
