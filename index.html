@@ -110,11 +110,18 @@ select.in { appearance: auto; }
 .mini { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
 .mini .prog { flex: 1; margin: 0; height: 6px; }
 .mini span:first-child { width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
+.dep { border-top: 1px dashed var(--rule); margin-top: 10px; padding-top: 8px; }
+.dep .li { padding: 8px 0; }
+.dep .li .t2, .dep .li .t1 { white-space: normal; }
+.proj { background: var(--green-s); border: 1px solid var(--green-b); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+.proj b { font-family: var(--mono); }
 .pct { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--rule); color: var(--ink2); }
 .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; border-top: 1px dashed var(--rule); color: var(--ink2); }
 .kv b { font-family: var(--mono); color: var(--ink); font-weight: 600; }
 .prog { height: 10px; background: var(--rule2); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
-.prog i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .4s; }
+.prog { position: relative; }
+.prog i.pj { position: absolute; left: 0; top: 0; background: var(--green-b); }
+.prog i { position: relative; display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .4s; }
 
 /* buttons & forms */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: 11px;
@@ -306,7 +313,7 @@ details.box .body { padding: 0 16px 14px; }
 
   function blank() {
     return { v: 1, startedAt: "", rate: 26000, split: { rot: 50, sav: 40, spd: 10 },
-      init: null, goal: null, goals: [], savTx: [], baseline: [], receipts: [], withdrawals: [], spends: [], payments: [], updatedAt: "" };
+      init: null, goal: null, goals: [], savTx: [], deposits: [], baseline: [], receipts: [], withdrawals: [], spends: [], payments: [], updatedAt: "" };
   }
   var D = blank();
   var ST = { needSQL: false, loaded: false, ledgerAt: "", ledgerErr: "" };
@@ -320,7 +327,7 @@ details.box .body { padding: 0 16px 14px; }
     var b = blank();
     for (var k in b) if (d[k] === undefined) d[k] = b[k];
     if (!d.split || num(d.split.rot) + num(d.split.sav) + num(d.split.spd) !== 100) d.split = b.split;
-    ["baseline", "receipts", "withdrawals", "spends", "payments", "goals", "savTx"].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+    ["baseline", "receipts", "withdrawals", "spends", "payments", "goals", "savTx", "deposits"].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
     /* chuyển mục tiêu đơn cũ sang danh sách mục tiêu */
     if (d.goal && num(d.goal.amt) > 0 && !d.goals.length) {
       var gid = "g" + uid();
@@ -504,20 +511,54 @@ details.box .body { padding: 0 16px 14px; }
     return v;
   }
   function daysBetween(a, b) { return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5); }
+  /* ---- gửi ngân hàng: lãi kép, tự quay vòng, chỉ tính số kỳ TRỌN ---- */
+  function addMonthsISO(iso, m) {
+    var p = iso.split("-").map(Number), y = p[0], mo = p[1] - 1 + m, d = p[2];
+    y += Math.floor(mo / 12); mo = ((mo % 12) + 12) % 12;
+    var last = new Date(y, mo + 1, 0).getDate();
+    return y + "-" + pad(mo + 1) + "-" + pad(Math.min(d, last));
+  }
+  function fullMonths(a, b) {   /* số tháng tròn từ a đến b */
+    if (!a || !b || b <= a) return 0;
+    var pa = a.split("-").map(Number), pb = b.split("-").map(Number);
+    var m = (pb[0] - pa[0]) * 12 + (pb[1] - pa[1]);
+    if (addMonthsISO(a, m) > b) m--;
+    return Math.max(0, m);
+  }
+  function depCalc(d, until) {
+    var P = num(d.amt), term = Math.max(1, num(d.term)), rt = num(d.rate) / 100;
+    var perRate = rt * term / 12, o = { term: term, perRate: perRate };
+    o.months = until ? fullMonths(d.date, until) : 0;
+    o.n = until ? Math.floor(o.months / term) : 0;
+    o.final = Math.round(P * Math.pow(1 + perRate, o.n));
+    o.interest = o.final - P;
+    o.lastMat = o.n > 0 ? addMonthsISO(d.date, o.n * term) : "";
+    o.firstInt = Math.round(P * perRate);
+    var k = 1; while (addMonthsISO(d.date, k * term) <= todayISO() && k < 999) k++;
+    o.nextMat = addMonthsISO(d.date, k * term);
+    return o;
+  }
+  function goalDeps(id) { return D.deposits.filter(function (d) { return d.goalId === id; }); }
   function goalCalc(g) {
     var r = rate(), o = { target: g.cur === "USD" ? num(g.amt) * r : num(g.amt), have: goalHave(g.id) };
+    o.deps = goalDeps(g.id); o.depSum = 0; o.interest = 0;
+    o.deps.forEach(function (d) { o.depSum += num(d.amt); if (g.deadline) o.interest += depCalc(d, g.deadline).interest; });
+    o.proj = o.have + o.interest;
     o.left = Math.max(0, o.target - o.have);
+    o.leftProj = Math.max(0, o.target - o.proj);
     o.pct = o.target > 0 ? Math.min(100, Math.max(0, o.have / o.target * 100)) : 0;
+    o.pctProj = o.target > 0 ? Math.min(100, Math.max(0, o.proj / o.target * 100)) : 0;
     o.done = o.target > 0 && o.have >= o.target;
+    o.doneProj = o.target > 0 && o.proj >= o.target;
     if (g.deadline) {
       o.days = daysBetween(todayISO(), g.deadline);
       if (o.days > 0) {
-        o.perDay = o.left / o.days;
-        o.perWeek = o.days >= 7 ? o.left / (o.days / 7) : o.left;
-        o.perMonth = o.days >= 30 ? o.left / (o.days / 30) : o.left;
+        o.perDay = o.leftProj / o.days;
+        o.perWeek = o.days >= 7 ? o.leftProj / (o.days / 7) : o.leftProj;
+        o.perMonth = o.days >= 30 ? o.leftProj / (o.days / 30) : o.leftProj;
       }
     }
-    o.needUSD = D.split.sav > 0 ? o.left / r / (D.split.sav / 100) : 0;
+    o.needUSD = D.split.sav > 0 ? o.leftProj / r / (D.split.sav / 100) : 0;
     return o;
   }
   function goalOptions(sel) {
@@ -762,27 +803,49 @@ details.box .body { padding: 0 16px 14px; }
   }
 
   /* ---------- Tiết kiệm ---------- */
+  function depRow(d, g) {
+    var c = depCalc(d, g.deadline);
+    var line2 = num(d.rate) + "%/năm · kỳ " + c.term + " tháng · gửi " + dmy(d.date) + " · đáo hạn tới " + dmy(c.nextMat);
+    var line3 = g.deadline
+      ? (c.n > 0 ? c.n + " kỳ trọn đến hạn mục tiêu (kỳ cuối " + dmy(c.lastMat) + ") · lãi +" + vnd(c.interest) + " → " + vnd(c.final)
+        : "Chưa đủ 1 kỳ trọn trước hạn mục tiêu → lãi 0")
+      : "Lãi mỗi kỳ đầu ≈ " + vnd(c.firstInt) + " · đặt hạn mục tiêu để tính lãi đến hạn";
+    return '<div class="li"><span class="ico" style="background:var(--blue-s);color:var(--blue)">' + ic("coins", 16) + "</span>" +
+      '<div class="t"><div class="t1">' + esc(d.bank || "Sổ tiết kiệm") + ' · <span class="mono">' + vnd(d.amt) + '</span></div><div class="t2">' + line2 + '</div><div class="t2" style="color:var(--green)">' + line3 + "</div></div>" +
+      '<div class="acts"><button class="icon" data-act="depEdit" data-id="' + d.id + '" title="Sửa">' + ic("edit", 16) + '</button><button class="icon" data-act="depDel" data-id="' + d.id + '" title="Xoá">' + ic("trash", 16) + "</button></div></div>";
+  }
   function goalCard(g) {
     var c = goalCalc(g), r = rate();
     var badge = c.done ? '<span class="badge ok">Đã đạt</span>' : (g.deadline ? (c.days > 0 ? '<span class="badge">Còn ' + c.days + " ngày</span>" : '<span class="badge late">' + (c.days === 0 ? "Hạn hôm nay" : "Quá hạn " + (-c.days) + " ngày") + "</span>") : '<span class="badge">Không đặt hạn</span>');
     var need = "";
-    if (!c.done) {
+    if (!c.done && !c.doneProj) {
       if (g.deadline && c.days > 0) {
         need = '<div class="need"><div><div class="lbl">Mỗi ngày</div><b>' + vnd(c.perDay) + "</b><small>" + usd(c.perDay / r) + "</small></div>" +
           '<div><div class="lbl">Mỗi tuần</div><b>' + vnd(c.perWeek) + "</b><small>" + usd(c.perWeek / r) + "</small></div>" +
           '<div><div class="lbl">Mỗi tháng</div><b>' + vnd(c.perMonth) + "</b><small>" + usd(c.perMonth / r) + "</small></div></div>";
       }
       need += '<p class="hint">Cần rút thêm khoảng <b>' + usd(c.needUSD) + "</b> từ Quỹ USD (với " + D.split.sav + "% vào tiết kiệm) để đủ mục tiêu" +
+        (c.interest > 0 ? " (đã trừ lãi dự kiến)" : "") +
         (g.deadline && c.days > 0 ? ", tức ~<b>" + usd(c.needUSD / (c.days / 30 < 1 ? 1 : c.days / 30)) + "/tháng</b>" : "") + ".</p>";
     }
+    var proj = c.deps.length && g.deadline
+      ? '<div class="proj"><div class="kv" style="border:none;padding:0"><span>Dự kiến đến ' + dmy(g.deadline) + " (gồm lãi)</span><b>" + vnd(c.proj) + "</b></div>" +
+        '<div class="kv" style="border:none;padding:2px 0 0"><span>Lãi dự kiến</span><b class="pos">+' + both(c.interest) + "</b></div>" +
+        '<div class="kv" style="border:none;padding:2px 0 0"><span>' + (c.doneProj ? "Dự kiến dư" : "Còn thiếu sau lãi") + "</span><b>" + both(c.doneProj ? c.proj - c.target : c.leftProj) + "</b></div></div>"
+      : "";
+    var warn = c.depSum > c.have + 0.5 ? '<div class="banner info" style="margin-top:8px">' + ic("alert", 16) + "<span>Tổng tiền gửi (" + vnd(c.depSum) + ") lớn hơn số đang có của mục tiêu (" + vnd(c.have) + ").</span></div>" : "";
+    var deps = '<div class="dep"><div class="row"><span class="lbl">Gửi ngân hàng (' + c.deps.length + ")</span>" +
+      (c.deps.length ? '<span class="sub">' + vnd(c.depSum) + "</span>" : "") +
+      '<button class="btn sm sp" data-act="depNew" data-id="' + g.id + '">' + ic("plus", 14) + " Thêm sổ gửi</button></div>" +
+      c.deps.map(function (d) { return depRow(d, g); }).join("") + warn + "</div>";
     return '<div class="goal' + (c.done ? " done" : "") + '"><div class="gh"><h4>' + esc(g.name) + "</h4>" + badge +
       '<span class="acts"><button class="icon" data-act="goalEdit" data-id="' + g.id + '" title="Sửa">' + ic("edit", 16) + '</button><button class="icon" data-act="goalDel" data-id="' + g.id + '" title="Xoá">' + ic("trash", 16) + "</button></span></div>" +
       (g.note ? '<div class="t2" style="color:var(--muted);font-size:12px">' + esc(g.note) + "</div>" : "") +
       '<div class="row" style="margin-top:8px;align-items:baseline"><span class="mid">' + vnd(c.have) + '</span><span class="sub">/ ' + vnd(c.target) + (g.cur === "USD" ? " (" + usd(g.amt) + ")" : "") + "</span></div>" +
-      '<div class="prog"><i style="width:' + c.pct.toFixed(1) + '%"></i></div>' +
-      '<div class="kv" style="border:none"><span>Đạt ' + c.pct.toFixed(1) + "%" + (g.deadline ? " · hạn " + dmy(g.deadline) : "") + "</span><b>" + (c.done ? "Dư " + both(c.have - c.target) : "Còn thiếu " + both(c.left)) + "</b></div>" +
-      need +
-      '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" data-act="savAdd" data-id="' + g.id + '">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut" data-id="' + g.id + '">' + ic("up", 14) + " Rút</button></div></div>";
+      '<div class="prog">' + (c.interest > 0 ? '<i class="pj" style="width:' + c.pctProj.toFixed(1) + '%"></i>' : "") + '<i style="width:' + c.pct.toFixed(1) + '%"></i></div>' +
+      '<div class="kv" style="border:none"><span>Đạt ' + c.pct.toFixed(1) + "%" + (c.interest > 0 ? " (" + c.pctProj.toFixed(1) + "% gồm lãi)" : "") + (g.deadline ? " · hạn " + dmy(g.deadline) : "") + "</span><b>" + (c.done ? "Dư " + both(c.have - c.target) : "Còn thiếu " + both(c.left)) + "</b></div>" +
+      proj + need + deps +
+      '<div class="row" style="gap:6px;margin-top:10px"><button class="btn sm" data-act="savAdd" data-id="' + g.id + '">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut" data-id="' + g.id + '">' + ic("up", 14) + " Rút</button></div></div>";
   }
   function viewSav() {
     var b = B(), r = rate(), gen = goalHave("");
@@ -887,6 +950,35 @@ details.box .body { padding: 0 16px 14px; }
       '<label class="fl" for="mNote">Nội dung</label><input class="in" id="mNote" value="' + esc(t ? t.note : "") + '" placeholder="' + (type === "out" ? "rút để làm gì" : "tiền từ đâu") + '">',
       CANCEL + '<button class="btn primary" data-act="saveSavTx" data-type="' + type + '" data-id="' + (id || "") + '">Lưu</button>');
   }
+  var TERMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 18, 24, 36, 48, 60];
+  function depSheet(goalId, id) {
+    var d = id ? find(D.deposits, id) : null; if (d) goalId = d.goalId;
+    var g = goalById(goalId); if (!g) return;
+    var term = d ? num(d.term) : 6;
+    modal((d ? "Sửa sổ gửi · " : "Gửi ngân hàng · ") + esc(g.name),
+      '<label class="fl" for="dBank">Ngân hàng / tên sổ</label><input class="in" id="dBank" value="' + esc(d ? d.bank : "") + '" placeholder="ví dụ: VCB sổ 1">' +
+      '<label class="fl" for="mAmt">Số tiền gửi</label>' + moneyInput("mAmt", d ? d.amt : 0, "VND", false) +
+      '<div class="row" style="gap:8px"><div style="flex:1;min-width:120px"><label class="fl" for="dRate">Lãi suất (%/năm)</label><input class="in mono" id="dRate" inputmode="decimal" value="' + (d ? d.rate : "") + '" placeholder="5.5"></div>' +
+      '<div style="flex:1;min-width:120px"><label class="fl" for="dTerm">Kỳ hạn</label><select class="in" id="dTerm">' +
+      TERMS.concat(TERMS.indexOf(term) < 0 ? [term] : []).map(function (t) { return '<option value="' + t + '"' + (t === term ? " selected" : "") + ">" + t + " tháng</option>"; }).join("") + "</select></div></div>" +
+      '<label class="fl" for="dDate">Ngày gửi</label><input class="in" id="dDate" type="date" value="' + (d ? d.date : todayISO()) + '">' +
+      '<div class="proj" id="dPrev"></div>' +
+      '<p class="hint">Lãi kép, tự động quay vòng cả gốc và lãi. Chỉ tính các kỳ <b>trọn</b> tới hạn mục tiêu' + (g.deadline ? " (" + dmy(g.deadline) + ")" : "") + ".</p>",
+      CANCEL + '<button class="btn primary" data-act="saveDep" data-goal="' + goalId + '" data-id="' + (id || "") + '">Lưu</button>', function () {
+        var upd = function () {
+          var x = { amt: valOf("mAmt"), rate: parseAmt(val("dRate"), "USD"), term: num(val("dTerm")), date: val("dDate") || todayISO() };
+          var el = document.getElementById("dPrev");
+          if (!(x.amt > 0) || !(x.rate > 0)) { el.innerHTML = "Nhập số tiền và lãi suất để xem lãi dự kiến."; return; }
+          var c = depCalc(x, g.deadline);
+          el.innerHTML = "Lãi mỗi kỳ đầu: <b>" + vnd(c.firstInt, 1) + "</b> (" + (x.rate * x.term / 12).toFixed(3).replace(/\.?0+$/, "") + "%/kỳ)<br>" +
+            (g.deadline ? "Đến hạn: " + c.months + " tháng tròn → <b>" + c.n + " kỳ</b>" + (c.n ? " (kỳ cuối " + dmy(c.lastMat) + ")" : "") +
+              "<br>Lãi dự kiến: <b>+" + vnd(c.interest, 1) + "</b> → gốc + lãi <b>" + vnd(c.final, 1) + "</b>"
+              : "Mục tiêu chưa đặt hạn nên chưa tính được lãi đến hạn.");
+        };
+        ["mAmt", "dRate", "dTerm", "dDate"].forEach(function (k) { var e = document.getElementById(k); e.addEventListener("input", upd); e.addEventListener("change", upd); });
+        upd();
+      });
+  }
   function rateSheet() {
     modal("Tỷ giá", '<label class="fl" for="rVal">1 USD = ? VND</label><input class="in mono" id="rVal" inputmode="numeric" value="' + NFV.format(rate()) + '" data-rate>' +
       '<p class="hint">Dùng để quy đổi hiển thị và làm tỷ giá mặc định khi rút. Các lần rút cũ giữ nguyên tỷ giá lúc rút.</p>',
@@ -967,9 +1059,22 @@ details.box .body { padding: 0 16px 14px; }
     goalEdit: function (el) { goalSheet(el.getAttribute("data-id")); },
     goalDel: function (el) {
       var g = goalById(el.getAttribute("data-id")); if (!g) return;
-      confirmSheet("Xoá mục tiêu “" + esc(g.name) + "”?", "Số tiền đang có của mục tiêu này (" + vnd(goalHave(g.id), 1) + ") sẽ chuyển về “Chung”, không bị mất.", "goalDelOK", g.id);
+      confirmSheet("Xoá mục tiêu “" + esc(g.name) + "”?", "Số tiền đang có của mục tiêu này (" + vnd(goalHave(g.id), 1) + ") sẽ chuyển về “Chung”, không bị mất." + (goalDeps(g.id).length ? " Các sổ gửi ngân hàng của mục tiêu này sẽ bị xoá." : ""), "goalDelOK", g.id);
     },
-    goalDelOK: function (el) { var id = el.getAttribute("data-id"); D.goals = D.goals.filter(function (g) { return g.id !== id; }); save(); closeModal(); render(); toast("Đã xoá mục tiêu"); },
+    goalDelOK: function (el) { var id = el.getAttribute("data-id"); D.goals = D.goals.filter(function (g) { return g.id !== id; }); D.deposits = D.deposits.filter(function (d) { return d.goalId !== id; }); save(); closeModal(); render(); toast("Đã xoá mục tiêu"); },
+    depNew: function (el) { depSheet(el.getAttribute("data-id")); },
+    depEdit: function (el) { depSheet(null, el.getAttribute("data-id")); },
+    depDel: function (el) { confirmSheet("Xoá sổ gửi này?", "Chỉ xoá bản ghi tính lãi, số dư tiết kiệm không đổi.", "depDelOK", el.getAttribute("data-id")); },
+    depDelOK: function (el) { var id = el.getAttribute("data-id"); D.deposits = D.deposits.filter(function (d) { return d.id !== id; }); save(); closeModal(); render(); toast("Đã xoá sổ gửi"); },
+    saveDep: function (el) {
+      var amt = valOf("mAmt"), rt = parseAmt(val("dRate"), "USD");
+      if (!(amt > 0)) { toast("Nhập số tiền gửi"); return; }
+      if (!(rt > 0)) { toast("Nhập lãi suất"); return; }
+      var id = el.getAttribute("data-id"), d = id ? find(D.deposits, id) : null;
+      if (!d) { d = { id: uid(), ts: Date.now(), goalId: el.getAttribute("data-goal") }; D.deposits.push(d); }
+      d.bank = val("dBank"); d.amt = Math.round(amt); d.rate = rt; d.term = num(val("dTerm")); d.date = val("dDate") || todayISO();
+      save(); closeModal(); render(); toast(id ? "Đã sửa sổ gửi" : "Đã thêm sổ gửi");
+    },
     savAdd: function (el) { savTxSheet("add", el.getAttribute("data-id") || undefined); },
     savOut: function (el) { savTxSheet("out", el.getAttribute("data-id") || undefined); },
     saveSavTx: function (el) {
