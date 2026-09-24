@@ -13,14 +13,16 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  --field:#F3F2F7; --panel:#FFFFFF; --panel2:#F8F7FC;
-  --ink:#2A2839; --ink2:#5E5B75; --muted:#9694AB;
-  --rule:#E8E6F0; --rule2:#F1F0F7;
-  --carbon:#6360C9; --carbon-s:#EFEEFC; --carbon-d:#5350B4;
-  --red:#C2566B; --red-s:#FCEFF2; --red-b:#F2D6DD;
-  --amber:#B4843F; --amber-s:#FBF3E6; --amber-b:#EFDFC4;
-  --green:#4E937C; --green-s:#EAF4F0; --green-b:#CFE6DC;
-  --blue:#3F7FB4; --blue-s:#EAF2FA;
+  --field:#EFF2F8; --panel:#FFFFFF; --panel2:#F6F7FB;
+  --ink:#1E2235; --ink2:#4A5068; --muted:#7A8099;
+  --rule:#E2E6F0; --rule2:#EEF1F6;
+  --carbon:#5B4FE0; --carbon-s:#EEECFD; --carbon-d:#4A3FC8;
+  --red:#D9425B; --red-s:#FDECEF; --red-b:#F7CDD5;
+  --amber:#E8710A; --amber-s:#FFF1E3; --amber-b:#FAD7B5;
+  --green:#0F9D6E; --green-s:#E3F6EE; --green-b:#BDE8D5;
+  --blue:#2563EB; --blue-s:#E8F0FE; --blue-b:#C9DAFB;
+  --pink:#C026D3; --pink-s:#FAE8FC; --pink-b:#F0C4F5;
+  --teal:#0891B2; --teal-s:#E2F5FA;
   --shadow: 0 1px 2px rgba(42,40,57,.04), 0 6px 18px rgba(42,40,57,.055);
   --shadow-lg: 0 24px 60px rgba(42,40,57,.22);
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -69,7 +71,8 @@ svg { flex: none; }
 .tab { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px 11px; font-size: 13px; font-weight: 600;
   color: var(--ink2); border-bottom: 2px solid transparent; white-space: nowrap; }
 .tab:hover { color: var(--ink); }
-.tab.on { color: var(--carbon); border-bottom-color: var(--carbon); }
+.tab.on { color: var(--tc, var(--carbon)); border-bottom-color: var(--tc, var(--carbon)); }
+.tab.on svg { stroke: var(--tc, var(--carbon)); }
 
 /* layout */
 .wrap { max-width: 1080px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -85,15 +88,18 @@ svg { flex: none; }
 .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
 .neg { color: var(--red) !important; }
 .pos { color: var(--green); }
-.hero { background: linear-gradient(135deg, #3B3890, #6360C9); color: #fff; border: none; }
+.hero { background: linear-gradient(135deg, #312E81 0%, #5B4FE0 55%, #8B5CF6 100%); color: #fff; border: none; box-shadow: 0 10px 30px rgba(91,79,224,.28); }
 .hero .lbl { color: rgba(255,255,255,.7); }
 .hero .sub { color: rgba(255,255,255,.85); }
 .hero .btn { background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.25); }
 .hero .btn.primary { background: #fff; color: var(--carbon-d); border-color: #fff; }
-.fund { position: relative; overflow: hidden; }
+.fund { position: relative; overflow: hidden; background: linear-gradient(165deg, var(--cs, #fff) 0%, #fff 60%); border-color: var(--cb, var(--rule)); }
+.fund .pct { background: #fff; border-color: var(--cb, var(--rule)); color: var(--c); font-weight: 700; }
+.fund .mid { color: var(--c); }
+.fund .mid.neg { color: var(--red); }
 .fund::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--carbon)); }
 .fund .tag { display: inline-flex; align-items: center; gap: 6px; }
-.goal { border: 1px solid var(--rule); border-radius: 14px; padding: 14px; background: var(--panel); }
+.goal { border: 1px solid var(--rule); border-left: 4px solid var(--green); border-radius: 14px; padding: 14px; background: var(--panel); }
 .goal.done { border-color: var(--green-b); background: var(--green-s); }
 .goal h4 { margin: 0; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .goal .gh { display: flex; align-items: center; gap: 8px; }
@@ -103,8 +109,9 @@ svg { flex: none; }
 .badge.ok { background: var(--green); border-color: var(--green); color: #fff; }
 .badge.late { background: var(--red-s); border-color: var(--red-b); color: var(--red); }
 .need { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
-.need > div { background: var(--panel2); border: 1px solid var(--rule2); border-radius: 10px; padding: 8px 10px; }
-.need b { display: block; font-family: var(--mono); font-size: 13.5px; }
+.need > div { background: var(--amber-s); border: 1px solid var(--amber-b); border-radius: 10px; padding: 8px 10px; }
+.need .lbl { color: var(--amber); }
+.need b { color: #9A4A05; display: block; font-family: var(--mono); font-size: 13.5px; }
 .need small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
 select.in { appearance: auto; }
 .mini { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
@@ -113,15 +120,35 @@ select.in { appearance: auto; }
 .dep { border-top: 1px dashed var(--rule); margin-top: 10px; padding-top: 8px; }
 .dep .li { padding: 8px 0; }
 .dep .li .t2, .dep .li .t1 { white-space: normal; }
-.proj { background: var(--green-s); border: 1px solid var(--green-b); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+.proj { color: #0B5E43; background: var(--green-s); border: 1px solid var(--green-b); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
 .proj b { font-family: var(--mono); }
+/* máy tính lãi */
+.calcbox { border-color: var(--pink-b); background: linear-gradient(165deg, var(--pink-s) 0%, #fff 55%); }
+.calcbox > summary { color: var(--pink); }
+.kgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; }
+.kres { margin-top: 14px; border-radius: 14px; padding: 14px; color: #fff; background: linear-gradient(135deg, #86198F, #C026D3 60%, #E879F9); }
+.kres .lbl { color: rgba(255,255,255,.75); }
+.kres .big { font-size: 28px; }
+.kres .sub { color: rgba(255,255,255,.88); }
+.kstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+.kstats > div { background: rgba(255,255,255,.14); border-radius: 10px; padding: 8px 10px; }
+.kstats b { display: block; font-family: var(--mono); font-size: 14px; }
+.kstats small { color: rgba(255,255,255,.8); font-size: 11.5px; }
+.ktab { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+.ktab th { text-align: right; font-size: 11px; color: var(--muted); font-weight: 700; padding: 6px 4px; border-bottom: 1px solid var(--rule); }
+.ktab td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--rule2); font-family: var(--mono); }
+.ktab th:first-child, .ktab td:first-child { text-align: left; }
+.ktab td.g { color: var(--green); }
+.mseg { display: flex; flex-wrap: wrap; gap: 6px; }
+.mseg button { padding: 7px 11px; border-radius: 10px; border: 1px solid var(--rule); background: #fff; font-size: 12.5px; font-weight: 600; color: var(--ink2); }
+.mseg button.on { background: var(--pink); border-color: var(--pink); color: #fff; }
 .pct { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--rule); color: var(--ink2); }
 .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; border-top: 1px dashed var(--rule); color: var(--ink2); }
 .kv b { font-family: var(--mono); color: var(--ink); font-weight: 600; }
 .prog { height: 10px; background: var(--rule2); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
 .prog { position: relative; }
 .prog i.pj { position: absolute; left: 0; top: 0; background: var(--green-b); }
-.prog i { position: relative; display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .4s; }
+.prog i { position: relative; display: block; height: 100%; background: linear-gradient(90deg, #10B981, var(--green)); border-radius: 999px; transition: width .4s; }
 
 /* buttons & forms */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: 11px;
@@ -574,9 +601,9 @@ details.box .body { padding: 0 16px 14px; }
     ["rot", "rotate", "Xoay vòng"], ["spd", "cart", "Tiêu dùng"], ["sav", "piggy", "Tiết kiệm"], ["hist", "list", "Lịch sử"]
   ];
   var FUND = {
-    rot: { name: "Xoay vòng vốn", c: "var(--carbon)", ic: "rotate" },
-    sav: { name: "Tiết kiệm", c: "var(--green)", ic: "piggy" },
-    spd: { name: "Tiêu dùng", c: "var(--amber)", ic: "cart" }
+    rot: { name: "Xoay vòng vốn", c: "var(--blue)", cs: "var(--blue-s)", cb: "var(--blue-b)", ic: "rotate" },
+    sav: { name: "Tiết kiệm", c: "var(--green)", cs: "var(--green-s)", cb: "var(--green-b)", ic: "piggy" },
+    spd: { name: "Tiêu dùng", c: "var(--amber)", cs: "var(--amber-s)", cb: "var(--amber-b)", ic: "cart" }
   };
 
   function render() {
@@ -585,7 +612,7 @@ details.box .body { padding: 0 16px 14px; }
     var ready = CFG.token && !ST.needSQL && D.startedAt;
     var tabs = document.getElementById("tabs");
     tabs.innerHTML = ready ? TABS.map(function (t) {
-      return '<button class="tab' + (UI.tab === t[0] ? " on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1], 16) + t[2] + "</button>";
+      return '<button class="tab' + (UI.tab === t[0] ? " on" : "") + '" data-tab="' + t[0] + '" style="--tc:' + ({ home: "var(--carbon)", main: "var(--carbon)", wd: "var(--teal)", rot: "var(--blue)", spd: "var(--amber)", sav: "var(--green)", hist: "var(--ink2)" }[t[0]]) + '">' + ic(t[1], 16) + t[2] + "</button>";
     }).join("") : "";
     var v = document.getElementById("view");
     if (!CFG.token) v.innerHTML = viewLogin();
@@ -598,6 +625,7 @@ details.box .body { padding: 0 16px 14px; }
     paintIcons(document.body);
     bindMoney(v);
     wdPreview("w");
+    kCalc();
   }
 
   function box(key, title, count, inner, defOpen) {
@@ -687,7 +715,7 @@ details.box .body { padding: 0 16px 14px; }
         var c = goalCalc(g); return '<div class="mini"><span>' + esc(g.name) + '</span><div class="prog"><i style="width:' + c.pct.toFixed(1) + '%"></i></div><b class="mono">' + Math.floor(c.pct) + "%</b></div>";
       }).join("") : '<div class="kv"><span>Chưa có mục tiêu</span></div>') +
       '<div class="row" style="margin-top:8px;gap:6px"><button class="btn sm" data-act="savAdd">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut">' + ic("up", 14) + ' Rút</button><button class="btn sm" data-act="goSav">Mục tiêu</button></div>';
-    return '<div class="card fund" style="--c:' + f.c + '"><div class="row"><span class="tag lbl" style="color:' + f.c + '">' + ic(f.ic, 15) + f.name + '</span><span class="pct sp">' + D.split[k] + "%</span></div>" +
+    return '<div class="card fund" style="--c:' + f.c + ";--cs:" + f.cs + ";--cb:" + f.cb + '"><div class="row"><span class="tag lbl" style="color:' + f.c + '">' + ic(f.ic, 15) + f.name + '</span><span class="pct sp">' + D.split[k] + "%</span></div>" +
       '<div class="mid' + (bal < 0 ? " neg" : "") + '" style="margin-top:6px">' + vnd(bal) + '</div><div class="sub">≈ ' + usd(bal / rate()) + "</div>" +
       '<div style="margin-top:10px">' + extra + "</div>" +
       (k === "rot" && bal < 0 ? '<div class="banner" style="margin-top:8px">' + ic("alert", 16) + "<span>Quỹ đang âm — cần rút thêm từ Quỹ USD.</span></div>" : "") +
@@ -732,9 +760,9 @@ details.box .body { padding: 0 16px 14px; }
     var o = a.o, r = rate();
     if (a.t === "init") return li("wallet", "var(--carbon-s)", "var(--carbon)", "Số dư ban đầu", dmy(a.date), usd(initUSD()), o.cur === "VND" ? vnd(o.amt) : vnd(initUSD() * r), "init", "init");
     if (a.t === "rec") return li("down", "var(--green-s)", "var(--green)", "Nhận tiền" + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "+" + usd(o.usd), "≈ " + vnd(o.usd * r), "rec", o.id);
-    if (a.t === "wd") return li("split", "var(--blue-s)", "var(--blue)", "Rút & chia" + (o.note ? " · " + esc(o.note) : "") + " · TK → " + esc(goalName(o.goalId)),
+    if (a.t === "wd") return li("split", "var(--teal-s)", "var(--teal)", "Rút & chia" + (o.note ? " · " + esc(o.note) : "") + " · TK → " + esc(goalName(o.goalId)),
       dmy(o.date) + " · " + NFV.format(o.rate) + " ₫/$ · " + o.pct.rot + "/" + o.pct.sav + "/" + o.pct.spd, "−" + usd(o.usd), vnd(wVND(o)), "wd", o.id);
-    if (a.t === "pay") return li("rotate", "var(--carbon-s)", "var(--carbon)", "Thanh toán · " + esc(o.name) + (o.week ? " · tuần " + o.week + "/4" : ""),
+    if (a.t === "pay") return li("rotate", "var(--blue-s)", "var(--blue)", "Thanh toán · " + esc(o.name) + (o.week ? " · tuần " + o.week + "/4" : ""),
       dmy(o.date) + " · trừ Xoay vòng" + (o.off ? " · không tính" : ""), "−" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "pay", o.id, o.off);
     if (a.t === "sav") return o.type === "out"
       ? li("up", "var(--red-s)", "var(--red)", "Rút tiết kiệm · " + esc(goalName(o.goalId)) + (o.note ? " · " + esc(o.note) : ""), dmy(o.date), "−" + vnd(o.vnd), "≈ " + usd(o.vnd / r), "sav", o.id)
@@ -777,7 +805,7 @@ details.box .body { padding: 0 16px 14px; }
       '<div style="margin-top:14px"><button class="btn primary block" data-act="withdraw">' + ic("split", 16) + " Rút và chia vào 3 quỹ</button></div>" +
       '<p class="hint">Tỷ lệ chia hiện tại ' + D.split.rot + "/" + D.split.sav + "/" + D.split.spd + ' — đổi trong <a href="#" data-act="settings">Cài đặt</a>.</p></div>';
     var totals = '<div class="grid">' + ["rot", "sav", "spd"].map(function (k) {
-      return '<div class="card fund" style="--c:' + FUND[k].c + '"><span class="lbl" style="color:' + FUND[k].c + '">Tổng đã chia · ' + FUND[k].name + '</span><div class="mid" style="margin-top:4px">' + vnd(b[k + "In"]) + "</div></div>";
+      return '<div class="card fund" style="--c:' + FUND[k].c + ";--cs:" + FUND[k].cs + ";--cb:" + FUND[k].cb + '"><span class="lbl" style="color:' + FUND[k].c + '">Tổng đã chia · ' + FUND[k].name + '</span><div class="mid" style="margin-top:4px">' + vnd(b[k + "In"]) + "</div></div>";
     }).join("") + "</div>";
     return form + totals + box("wd-list", "Lịch sử rút", wd.length, wd.map(function (a) {
       var w = a.o;
@@ -847,11 +875,59 @@ details.box .body { padding: 0 16px 14px; }
       proj + need + deps +
       '<div class="row" style="gap:6px;margin-top:10px"><button class="btn sm" data-act="savAdd" data-id="' + g.id + '">' + ic("plus", 14) + ' Thêm</button><button class="btn sm" data-act="savOut" data-id="' + g.id + '">' + ic("up", 14) + " Rút</button></div></div>";
   }
+  /* ---- máy tính lãi tiền gửi (chỉ tính, không lưu dữ liệu) ---- */
+  var KC = { amt: 100000000, rate: 6, term: 6, dur: 12, mode: "comp", date: "" };
+  try { var k0 = JSON.parse(lsGet("quy-calc-v1") || "null"); if (k0) for (var kk in KC) if (k0[kk] !== undefined) KC[kk] = k0[kk]; } catch (e) {}
+  function calcBox() {
+    var terms = [1, 2, 3, 6, 9, 12, 13, 18, 24, 36];
+    var inner = '<div class="kgrid" id="kcalc">' +
+      '<div><label class="fl" for="kAmt">Số tiền gửi</label>' + moneyInput("kAmt", KC.amt, "VND", false) + "</div>" +
+      '<div><label class="fl" for="kRate">Lãi suất (%/năm)</label><input class="in mono" id="kRate" inputmode="decimal" value="' + KC.rate + '"></div>' +
+      '<div><label class="fl" for="kTerm">Kỳ hạn</label><select class="in" id="kTerm">' + terms.map(function (t) { return '<option value="' + t + '"' + (t === num(KC.term) ? " selected" : "") + ">" + t + " tháng</option>"; }).join("") + "</select></div>" +
+      '<div><label class="fl" for="kDur">Tổng thời gian gửi (tháng)</label><input class="in mono" id="kDur" inputmode="numeric" value="' + KC.dur + '"' + (KC.mode === "none" ? " disabled" : "") + '></div>' +
+      '<div><label class="fl" for="kDate">Ngày gửi</label><input class="in" id="kDate" type="date" value="' + (KC.date || todayISO()) + '"></div>' +
+      "</div>" +
+      '<label class="fl">Khi đến hạn</label><div class="mseg" id="kMode">' +
+      [["comp", "Quay vòng gốc + lãi"], ["prin", "Quay vòng gốc, rút lãi"], ["none", "Không tái tục"]].map(function (m) {
+        return '<button type="button" data-kmode="' + m[0] + '" class="' + (KC.mode === m[0] ? "on" : "") + '">' + m[1] + "</button>"; }).join("") + "</div>" +
+      '<div id="kOut"></div>';
+    return box("sav-calc", ic("coins", 16) + " Máy tính lãi tiền gửi", null, inner, true).replace('class="box"', 'class="box calcbox"');
+  }
+  function kCalc() {
+    var out = document.getElementById("kOut"); if (!out) return;
+    KC.amt = valOf("kAmt"); KC.rate = parseAmt(val("kRate"), "USD"); KC.term = num(val("kTerm")) || 6;
+    KC.dur = Math.max(0, Math.floor(num(val("kDur")))); KC.date = val("kDate") || todayISO();
+    lsSet("quy-calc-v1", JSON.stringify(KC));
+    var P = KC.amt, m = KC.term, per = KC.rate / 100 * m / 12;
+    if (!(P > 0) || !(KC.rate > 0)) { out.innerHTML = '<p class="hint">Nhập số tiền và lãi suất để xem kết quả.</p>'; return; }
+    var n = KC.mode === "none" ? 1 : Math.floor(KC.dur / m);
+    var odd = KC.mode === "none" ? 0 : KC.dur - n * m;
+    if (n < 1) { out.innerHTML = '<div class="banner info" style="margin-top:12px">' + ic("alert", 16) + "<span>Tổng thời gian gửi ngắn hơn 1 kỳ hạn (" + m + " tháng) nên chưa có kỳ nào trọn để tính lãi.</span></div>"; return; }
+    var bal = P, totInt = 0, rows = "";
+    for (var i = 1; i <= n; i++) {
+      var it = Math.round((KC.mode === "comp" ? bal : P) * per);
+      totInt += it; if (KC.mode === "comp") bal += it;
+      if (i <= 120) rows += "<tr><td>Kỳ " + i + "</td><td>" + dmy(addMonthsISO(KC.date, i * m)) + '</td><td class="g">+' + NFV.format(it) + "</td><td>" + NFV.format(KC.mode === "comp" ? bal : P + totInt) + "</td></tr>";
+    }
+    var total = P + totInt, mat = addMonthsISO(KC.date, n * m), r = rate();
+    var eff = (Math.pow(total / P, 12 / (n * m)) - 1) * 100;
+    out.innerHTML = '<div class="kres"><div class="lbl">Nhận về ngày ' + dmy(mat) + " (sau " + n * m + " tháng)</div>" +
+      '<div class="big" style="margin-top:4px">' + vnd(total, 1) + '</div><div class="sub">≈ ' + usd(total / r, 1) + "</div>" +
+      '<div class="kstats"><div><small>Tiền lãi</small><b>+' + vnd(totInt, 1) + "</b></div>" +
+      "<div><small>Số kỳ trọn</small><b>" + n + " kỳ × " + m + " th</b></div>" +
+      "<div><small>Lãi mỗi kỳ" + (KC.mode === "comp" ? " (kỳ đầu)" : "") + "</small><b>" + vnd(Math.round(P * per), 1) + "</b></div>" +
+      "<div><small>Lãi suất thực/năm</small><b>" + eff.toFixed(2) + "%</b></div></div></div>" +
+      (odd > 0 ? '<p class="hint">' + odd + " tháng lẻ còn lại không đủ 1 kỳ nên không tính lãi.</p>" : "") +
+      (KC.mode === "prin" ? '<p class="hint">Lãi được rút ra mỗi kỳ, không nhập gốc — tổng trên = gốc + tổng lãi đã nhận.</p>' : "") +
+      '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--pink)">Xem chi tiết từng kỳ</summary>' +
+      '<table class="ktab"><thead><tr><th>Kỳ</th><th>Đáo hạn</th><th>Lãi</th><th>Số dư</th></tr></thead><tbody>' + rows + "</tbody></table></details>";
+  }
+
   function viewSav() {
     var b = B(), r = rate(), gen = goalHave("");
-    var top = '<div class="card fund" style="--c:var(--green)"><div class="row"><span class="tag lbl" style="color:var(--green)">' + ic("piggy", 15) + 'Tổng tiết kiệm</span><span class="pct sp">' + D.split.sav + "%</span></div>" +
+    var top = '<div class="card fund" style="--c:var(--green);--cs:var(--green-s);--cb:var(--green-b)"><div class="row"><span class="tag lbl" style="color:var(--green)">' + ic("piggy", 15) + 'Tổng tiết kiệm</span><span class="pct sp">' + D.split.sav + "%</span></div>" +
       '<div class="mid' + (b.sav < 0 ? " neg" : "") + '" style="margin-top:6px">' + vnd(b.sav) + '</div><div class="sub">≈ ' + usd(b.sav / r) + "</div>" +
-      '<div style="margin-top:10px"><div class="kv"><span>Từ các lần rút & chia</span><b>' + vnd(b.savIn) + '</b></div><div class="kv"><span>Thêm tay</span><b>+' + vnd(b.savAdd) + '</b></div><div class="kv"><span>Rút ra</span><b>−' + vnd(b.savOut) + "</b></div></div>" +
+      '<div style="margin-top:10px"><div class="kv"><span>Từ các lần rút & chia</span><b>' + vnd(b.savIn) + '</b></div><div class="kv"><span>Thêm tay</span><b>+' + vnd(b.savAdd) + '</b></div><div class="kv"><span>Rút ra</span><b>' + (b.savOut ? "−" : "") + vnd(b.savOut) + "</b></div></div>" +
       '<div class="row" style="margin-top:10px;gap:6px"><button class="btn primary sm" data-act="savAdd">' + ic("plus", 14) + ' Thêm tiền</button><button class="btn sm" data-act="savOut">' + ic("up", 14) + " Rút tiền</button></div></div>";
     var goals = '<div class="card"><div class="row"><span class="lbl">' + ic("flag", 14) + " Mục tiêu (" + D.goals.length + ')</span><button class="btn primary sm sp" data-act="goalNew">' + ic("plus", 14) + " Thêm mục tiêu</button></div>" +
       '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">' + (D.goals.map(goalCard).join("") || '<div class="empty">Chưa có mục tiêu nào. Bấm “Thêm mục tiêu”.</div>') + "</div>" +
@@ -860,7 +936,7 @@ details.box .body { padding: 0 16px 14px; }
       if (a.t === "sav") return actRow(a);
       var w = a.o; return li("piggy", "var(--green-s)", "var(--green)", "Từ lần rút " + usd(w.usd) + " → " + esc(goalName(w.goalId)), dmy(w.date) + " · " + w.pct.sav + "%", "+" + vnd(wPart(w, "sav")), "≈ " + usd(wPart(w, "sav") / r), "wd", w.id);
     });
-    return top + goals + box("sav-list", "Lịch sử tiết kiệm", hist.length, hist.join("") || '<div class="empty">Chưa có.</div>', false);
+    return top + calcBox() + goals + box("sav-list", "Lịch sử tiết kiệm", hist.length, hist.join("") || '<div class="empty">Chưa có.</div>', false);
   }
 
   /* ---------- Lịch sử ---------- */
@@ -1177,6 +1253,9 @@ details.box .body { padding: 0 16px 14px; }
   document.addEventListener("click", function (ev) {
     var t = ev.target.closest("[data-tab]");
     if (t) { UI.tab = t.getAttribute("data-tab"); saveUI(); render(); window.scrollTo(0, 0); return; }
+    var km = ev.target.closest("[data-kmode]");
+    if (km) { KC.mode = km.getAttribute("data-kmode"); document.querySelectorAll("[data-kmode]").forEach(function (b) { b.className = b === km ? "on" : ""; });
+      var dd = document.getElementById("kDur"); if (dd) dd.disabled = KC.mode === "none"; kCalc(); return; }
     var hf = ev.target.closest("[data-hf]");
     if (hf) { UI.hfilter = hf.getAttribute("data-hf"); render(); return; }
     var sg = ev.target.closest("[data-seg] button");
@@ -1195,6 +1274,7 @@ details.box .body { padding: 0 16px 14px; }
   });
   document.addEventListener("input", function (ev) {
     var el = ev.target;
+    if (el.closest && el.closest("#kcalc")) kCalc();
     if (el.hasAttribute && el.hasAttribute("data-money")) calcLine(el);
     if (el.hasAttribute && el.hasAttribute("data-rate")) {
       document.querySelectorAll('[data-ratefrom="' + el.id + '"]').forEach(calcLine);
